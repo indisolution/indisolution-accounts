@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IndiSolution - Unit Accounts</title>
+<meta name="description" content="IndiSolution Unit Accounts — secure accounting for units. Log in with your unit code.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b2447">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon-64.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>
+  /* =================================================================
+     PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL BELOW (it ends in /exec).
+     Keep the quote marks.
+     ================================================================= */
+  var APP_EXEC_URL = "https://script.google.com/macros/s/AKfycbzaCXjkZOjkm3NO7qkcROAZc_p8XPJtasBKQyCr3eiIgNfnixeUVndesuaQT8-m_5IU/exec";
+</script>
+<style>
+  :root { --navy: #0b2447; --navy-2: #133a6b; --accent: #f08a24; --muted: #5a6b82; --line: #d5dfec; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #fff; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif; color: #0f1b2d; }
+
+  #app {
+    position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
+    border: 0; margin: 0; padding: 0; display: block; overflow: hidden; background: #fff;
+  }
+  [hidden] { display: none !important; }
+
+  /* Loading veil shown until the app has loaded */
+  #loading {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; background: #fff; color: var(--muted); font-size: 15px; z-index: 2;
+  }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid #e3eaf3; border-top-color: var(--navy); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Unit code box */
+  #gate {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto;
+    background: radial-gradient(900px 420px at 80% -10%, #1d4f8f 0%, transparent 60%), linear-gradient(160deg, #0b2447, #0e2d57);
+  }
+  .box {
+    width: 100%; max-width: 380px; background: #fff; border-radius: 16px; padding: 30px 26px 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .25); text-align: center;
+  }
+  .mark { width: 64px; height: auto; display: block; margin: 0 auto 12px; }
+  .box h1 { font-size: 20px; margin: 0 0 4px; color: var(--navy); letter-spacing: -.01em; }
+  .box p { margin: 0 0 22px; color: var(--muted); font-size: 14.5px; }
+  .box label { display: block; text-align: left; font-weight: 650; font-size: 14px; margin-bottom: 6px; }
+  .box input {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 18px; letter-spacing: .06em; text-transform: uppercase;
+    padding: 12px 14px; border: 1.5px solid #cdd7e4; border-radius: 10px; color: var(--navy);
+  }
+  .box input::placeholder { text-transform: none; letter-spacing: normal; color: #9aa8bb; }
+  .box input:focus { outline: 3px solid rgba(29, 79, 143, .18); border-color: #1d4f8f; }
+  .box button {
+    width: 100%; margin-top: 14px; font: inherit; font-weight: 700; font-size: 16px; cursor: pointer;
+    background: var(--accent); color: var(--navy); border: 0; border-radius: 999px; padding: 13px;
+  }
+  .box button:hover { background: #f59a3d; }
+  .box button:focus-visible { outline: 3px solid var(--navy); outline-offset: 2px; }
+  .err { color: #a32020; font-size: 13.5px; min-height: 1.2em; margin: 8px 0 0; text-align: left; }
+  .foot { margin-top: 18px; font-size: 13px; color: var(--muted); }
+  .foot a { color: #1d4f8f; }
+</style>
+</head>
+<body>
+
+<div id="gate" hidden>
+  <form class="box" id="gate-form" novalidate>
+    <img class="mark" src="logo-tree.png" alt="" width="64" height="73">
+    <h1>IndiSolution Unit Accounts</h1>
+    <p>Enter your unit code to continue.</p>
+    <label for="unit">Unit code</label>
+    <input id="unit" name="u" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 34TN" required>
+    <div class="err" id="err" role="alert"></div>
+    <button type="submit">Continue</button>
+    <div class="foot">Don't have a unit code? <a href="https://indisolution.in/unit-accounts.html#trial">Request a free trial</a></div>
+  </form>
+</div>
+
+<div id="loading" hidden><div class="spinner" aria-hidden="true"></div><span>Opening Unit Accounts…</span></div>
+
+<iframe id="app" title="IndiSolution Unit Accounts" hidden
+        allow="clipboard-read; clipboard-write; fullscreen"
+        referrerpolicy="strict-origin-when-cross-origin"></iframe>
+
+<script>
+(function () {
+  "use strict";
+  var gate = document.getElementById("gate");
+  var form = document.getElementById("gate-form");
+  var input = document.getElementById("unit");
+  var err = document.getElementById("err");
+  var frame = document.getElementById("app");
+  var loading = document.getElementById("loading");
+  var STORE_KEY = "indi_last_unit";
+
+  function configured() {
+    return /^https:\/\/script\.google\.com\/.+\/exec(\?.*)?$/.test(APP_EXEC_URL);
+  }
+
+  // Load the app, passing this page's whole query string through unchanged.
+  function openApp(search) {
+    var qs = search.replace(/^\?/, "");
+    var url = APP_EXEC_URL + (qs ? (APP_EXEC_URL.indexOf("?") === -1 ? "?" : "&") + qs : "");
+    gate.hidden = true;
+    loading.hidden = false;
+    frame.hidden = false;
+    frame.addEventListener("load", function () { loading.hidden = true; }, { once: true });
+    frame.src = url;
+  }
+
+  function showGate(message) {
+    gate.hidden = false;
+    try { input.value = localStorage.getItem(STORE_KEY) || ""; } catch (e) {}
+    if (message) err.textContent = message;
+    input.focus();
+  }
+
+  if (!configured()) {
+    showGate("This page is not set up yet: the app address has not been added.");
+    form.querySelector("button").disabled = true;
+    return;
+  }
+
+  var params = new URLSearchParams(location.search);
+  var u = (params.get("u") || "").trim();
+  if (u) {
+    openApp(location.search);
+  } else {
+    showGate("");
+  }
+
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var code = input.value.trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9 _\/-]{0,29}$/.test(code)) {
+      err.textContent = "Please enter a valid unit code (letters and numbers).";
+      input.focus();
+      return;
+    }
+    err.textContent = "";
+    try { localStorage.setItem(STORE_KEY, code); } catch (e) {}
+    params.set("u", code);
+    var search = "?" + params.toString();
+    // Put the unit code in the address bar so the page can be bookmarked.
+    try { history.replaceState(null, "", location.pathname + search + location.hash); } catch (e) {}
+    openApp(search);
+  });
+})();
+</script>
+</body>
+</html>
